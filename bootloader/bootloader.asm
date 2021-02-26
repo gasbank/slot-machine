@@ -1,142 +1,185 @@
-bits 16
+[org 0x00]
+[bits 16]
 
-mov ax, 0x07c0
-mov ds, ax
-mov ax, 0x07e0
-mov ss, ax
-mov sp, 0x2000
+SECTION .text
 
-call clearscreen
+jmp 0x07C0:START
 
-push 0x0100
-call movecursor
-add sp, 2
 
-push msgcol1
-call print
-add sp, 2
+TOTALSECTORCOUNT:       dw      1024
 
-push 0x0200
-call movecursor
-add sp, 2
 
-push msgcol2
-call print
-add sp, 2
+START:
+    ; DS 부트로더의 시작 주소를 세그먼트 레지스터 값으로 변환 (0x7C00)
+    mov ax, 0x07C0
+    mov ds, ax
+    ; ES 비디오 메모리를 세그먼트 레지스터 값으로 지정 (0xB8000)
+    mov ax, 0xB800
+    mov es, ax
 
-push 0x0300
-call movecursor
-add sp, 2
+    ; 스택 생성
+    mov ax, 0x0000
+    mov ss, ax
+    mov sp, 0xFFFE
+    mov bp, 0xFFFE
 
-push msgcol3
-call print
-add sp, 2
+    ; 화면 지우기
+    mov si, 0
 
-push 0x0400
-call movecursor
-add sp, 2
+.SCREENCLEARLOOP:
+    mov byte[es:si], 0                  ; 글자 삭제
+    mov byte[es:si+1], 0x0A             ; 글자 글씨색 지정
+    add si, 2                           ; 다음 칸
+    cmp si, 80 * 25 * 2
+    jl .SCREENCLEARLOOP
 
-push msgcol4
-call print
-add sp, 2
 
-push 0x0500
-call movecursor
-add sp, 2
+    ; 화면 상단에 시작 메시지 출력
+    push MESSAGE1
+    push 0
+    push 0
+    call PRINTMESSAGE
+    add sp, 6
+    
 
-push msgcol5
-call print
-add sp, 2
+RESETDISK:
+    mov ax, 0
+    mov dl, 0
+    int 0x13
+    jc HANDLEDISKERROR
 
-push 0x0600
-call movecursor
-add sp, 2
 
-push msgcol6
-call print
-add sp, 2
 
-push 0x0700
-call movecursor
-add sp, 2
 
-push msgcol7
-call print
-add sp, 2
+    ; 디스크 내용을 복사할 주소는 0x10000 (64KB 지점)
+    mov si, 0x1000
+    mov es, si
+    mov bx, 0x0000
 
-.halt:
-cli
-hlt
+    ; 읽어들일 총 섹터 숫자 설정 (줄여가면서 반복)
+    mov di, word[TOTALSECTORCOUNT]
 
-clearscreen:
+READDATA:
+    cmp di, 0
+    je READEND
+    sub di, 0x1
+
+    ; BIOS Disk I/O
+    mov ah, 0x02                        ; Read Sector BIOS 서비스 번호
+    mov al, 0x1                         ; 읽을 섹터 수는 한 개
+    mov ch, byte [TRACKNUMBER]          ; 읽을 트랙 번호 지정
+    mov cl, byte [SECTORNUMBER]         ; 읽을 섹터 번호 지정
+    mov dh, byte [HEADNUMBER]           ; 읽을 헤드 번호 지정
+    mov dl, 0x00                        ; 읽을 드라이브 번호 지정 (0=Floppy)
+    int 0x13                            ; 인터럽트!
+    jc HANDLEDISKERROR
+
+    add si, 0x200                       ; 512바이트 읽었으니까 메모리 주소 그만큼 증가
+    mov es, si
+
+    ; 섹터 읽었으니까 다음 섹터로
+    ; SECTORNUMBER 1증가시키고, 19 미만이면 READDATA 반복
+    mov al, byte [SECTORNUMBER]
+    add al, 1
+    mov byte[SECTORNUMBER], al
+    cmp al, 19
+    jl READDATA
+
+    ; 섹터 끝까지 읽었으니까 헤드 변경
+    ; 헤드는 토글 (0->1, 1->0)
+    ; 섹터는 다시 1로
+    xor byte[HEADNUMBER], 1
+    mov byte[SECTORNUMBER], 1
+
+    ; 지금 상태에서 헤드가 0이란 이야기는 앞뒷면 다 읽었단 뜻이니...
+    ; 점프하지 말고 아래로 내려가 트랙 번호 증가
+    ; 1이라면 READDATA로 가면 됨
+    cmp byte[HEADNUMBER], 0
+    jne READDATA
+
+    add byte[TRACKNUMBER], 1
+    jmp READDATA
+
+READEND:
+
+    ; 로딩 완료
+    push LOADINGCOMPLETEMESSAGE
+    push 7
+    push 20
+    call PRINTMESSAGE
+    add sp, 6
+
+HANDLEDISKERROR:
+    push DISKERRORMESSAGE
+    push 7
+    push 20
+    call PRINTMESSAGE
+    hlt
+
+
+
+PRINTMESSAGE:
     push bp
     mov bp, sp
-    pusha
 
-    mov ah, 0x07        ; 스크롤하기
-    mov al, 0x00        ; 전체 창 지우기
-    mov bh, 0x70        ; 검은 바탕 회색 글씨
-    mov cx, 0x00        ; 왼쪽 위 구석이 (0,0) 좌표가 되도록
-    mov dh, 0x18        ; 18h = 24행
-    mov dl, 0x4f        ; 4fh = 79열
-    int 0x10            ; 비디오 인터럽트
+    push es
+    push si
+    push di
+    push ax
+    push cx
+    push dx
 
-    popa
-    mov sp, bp
+    mov ax, 0xB800
+    mov es, ax
+
+    ; Y 좌표 계산
+    mov ax, word[bp+6]
+    mov si, 160                 ; 2 x 80 컬럼
+    mul si
+    mov di, ax
+
+    ; X 좌표 계산
+    mov ax, word[bp+4]
+    mov si, 2
+    mul si
+    add di, ax                  ; 최종 위치
+
+    ; 출력할 문자열의 주소
+    mov si, word[bp+8]
+
+.MESSAGELOOP:
+    mov cl, byte[si]
+    cmp cl, 0
+    je .MESSAGEEND
+
+    mov byte[es:di], cl
+    add si, 1                   ; 다음 글자
+    add di, 2                   ; 다음 글자 (비디오 메모리 상)
+
+    jmp .MESSAGELOOP
+
+.MESSAGEEND:
+    pop dx
+    pop cx
+    pop ax
+    pop di
+    pop si
+    pop es
     pop bp
     ret
 
-movecursor:
-    push bp
-    mov bp, sp
-    pusha
 
-    mov dx, [bp+4]      ; 함수 인자를 dx에 넣는다.
-    mov ah, 0x02        ; 커서 위치 지정
-    mov bh, 0x00        ; 페이지 0 지정 (상관 없음. 더블버퍼링 쓰지 않을 것이기 때문)
-    int 0x10            ; 비디오 인터럽트
 
-    popa
-    mov sp, bp
-    pop bp
-    ret
 
-print:
-    push bp
-    mov bp, sp
-    pusha
 
-    mov si, [bp+4]
-    mov bh, 0x00
-    mov bl, 0x00
-    mov ah, 0x0e
-.char:
-    mov al, [si]
-    add si, 1
-    or al, 0
-    je .return
-    int 0x10
-    jmp .char
-.return:
-    popa
-    mov sp, bp
-    pop bp
-    ret
+MESSAGE1:   db "Hello!", 0
+DISKERRORMESSAGE: db "Disk error", 0
+LOADINGCOMPLETEMESSAGE: db "Loading completed.", 0
 
-msgcol1:
-    db "   _____   __  __    ____     _____", 0
-msgcol2:
-    db "  / ____| |  \/  |  / __ \   / ____|", 0
-msgcol3:
-    db " | (___   | \  / | | |  | | | (___", 0
-msgcol4:
-    db "  \___ \  | |\/| | | |  | |  \___ \", 0
-msgcol5:
-    db "  ____) | | |  | | | |__| |  ____) |", 0
-msgcol6:
-    db " |_____/  |_|  |_|  \____/  |_____/", 0
-msgcol7:
-    db "SLOT MACHINE OPERATING SYSTEM", 0
+SECTORNUMBER:           db      0x02
+HEADNUMBER:             db      0x00
+TRACKNUMBER:            db      0x00
 
 times 510-($-$$) db 0
+
 dw 0xaa55
