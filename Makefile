@@ -1,6 +1,6 @@
-all: bootloader
+all: loader
 
-bootloader:
+loader:
 	make -C bootloader
 
 clean:
