@@ -8,7 +8,6 @@ jmp 0x07C0:START
 
 TOTALSECTORCOUNT:       dw      1024
 
-
 START:
     ; DS 부트로더의 시작 주소를 세그먼트 레지스터 값으로 변환 (0x7C00)
     mov ax, 0x07C0
@@ -34,12 +33,14 @@ START:
     jl .SCREENCLEARLOOP
 
 
+    
+
     ; 화면 상단에 시작 메시지 출력
-    push MESSAGE1
-    push 0
-    push 0
-    call PRINTMESSAGE
-    add sp, 6
+    ;push MESSAGE1
+    ;push 0
+    ;push 0
+    ;call PRINTMESSAGE
+    ;add sp, 6
     
 
 RESETDISK:
@@ -50,7 +51,6 @@ RESETDISK:
 
 
 
-
     ; 디스크 내용을 복사할 주소는 0x10000 (64KB 지점)
     mov si, 0x1000
     mov es, si
@@ -58,6 +58,8 @@ RESETDISK:
 
     ; 읽어들일 총 섹터 숫자 설정 (줄여가면서 반복)
     mov di, word[TOTALSECTORCOUNT]
+
+
 
 READDATA:
     cmp di, 0
@@ -74,7 +76,8 @@ READDATA:
     int 0x13                            ; 인터럽트!
     jc HANDLEDISKERROR
 
-    add si, 0x200                       ; 512바이트 읽었으니까 메모리 주소 그만큼 증가
+
+    add si, 0x0020                      ; 512바이트 읽었으니까 메모리 주소 그만큼 증가
     mov es, si
 
     ; 섹터 읽었으니까 다음 섹터로
@@ -101,13 +104,15 @@ READDATA:
     jmp READDATA
 
 READEND:
-
+    
     ; 로딩 완료
-    push LOADINGCOMPLETEMESSAGE
-    push 7
-    push 20
-    call PRINTMESSAGE
-    add sp, 6
+    ;push LOADINGCOMPLETEMESSAGE
+    ;push 7
+    ;push 20
+    ;call PRINTMESSAGE
+    ;add sp, 6
+    
+    jmp 0x1000:0x0000
 
 HANDLEDISKERROR:
     push DISKERRORMESSAGE
