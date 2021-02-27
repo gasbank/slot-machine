@@ -1,12 +1,9 @@
-[org 0x00]
-[bits 16]
+bits 16
 
-SECTION .text
+;SECTION .text
 
-jmp 0x07C0:START
+;jmp 0x07C0:START
 
-
-TOTALSECTORCOUNT:       dw      1024
 
 START:
     ; DS 부트로더의 시작 주소를 세그먼트 레지스터 값으로 변환 (0x7C00)
@@ -36,11 +33,17 @@ START:
     
 
     ; 화면 상단에 시작 메시지 출력
-    ;push MESSAGE1
-    ;push 0
-    ;push 0
-    ;call PRINTMESSAGE
-    ;add sp, 6
+    push MESSAGE1
+    push 0
+    push 0
+    call PRINTMESSAGE
+    add sp, 6
+
+    push FULLLINE
+    push 1
+    push 0
+    call PRINTMESSAGE
+    add sp, 6
     
 
 RESETDISK:
@@ -177,9 +180,11 @@ PRINTMESSAGE:
 
 
 
-MESSAGE1:   db "Hello!", 0
-DISKERRORMESSAGE: db "Disk error", 0
+MESSAGE1:               db "Hello!", 0
+DISKERRORMESSAGE:       db "Disk error", 0
 LOADINGCOMPLETEMESSAGE: db "Loading completed.", 0
+FULLLINE:               db "01234567890123456789012345678901234567890123456789012345678901234567890123456789", 0
+TOTALSECTORCOUNT:       dw      10
 
 SECTORNUMBER:           db      0x02
 HEADNUMBER:             db      0x00
