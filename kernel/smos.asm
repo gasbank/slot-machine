@@ -7,59 +7,24 @@ jmp 0x1000:START
 
 TOTALSECTORCOUNT    equ 10
 
-
 START:
     mov ax, cs
     mov ds, ax
     mov ax, 0xB800
     mov es, ax
 
-    
-    push msgcol1
+    push LOGO
     push 6
-    push 0
+    push 20
     call PRINTMESSAGE
     add sp, 6
-    push msgcol2
-    push 7
-    push 0
-    call PRINTMESSAGE
-    add sp, 6
-    push msgcol3
-    push 8
-    push 0
-    call PRINTMESSAGE
-    add sp, 6
-    push msgcol4
-    push 9
-    push 0
-    call PRINTMESSAGE
-    add sp, 6
-    push msgcol5
-    push 10
-    push 0
-    call PRINTMESSAGE
-    add sp, 6
-    push msgcol6
-    push 11
-    push 0
-    call PRINTMESSAGE
-    add sp, 6
-    push msgcol7
-    push 12
-    push 0
-    call PRINTMESSAGE
-    add sp, 6
-
+    
     push 0x0000
     call MOVECURSOR
     add sp, 2
 
     cli
     hlt
-
-
-
 
 
 PRINTMESSAGE:
@@ -93,14 +58,28 @@ PRINTMESSAGE:
 
 .MESSAGELOOP:
     mov cl, byte[si]
-    cmp cl, 0
+    cmp cl, 0                   ; NULL 문자라면 종료처리한다.
     je .MESSAGEEND
-
-    mov byte[es:di], cl
+    cmp cl, `\n`                ; 개행문자라면 
+    je .MESSAGENEWLINE
+    
+    mov byte[es:di], cl         ; 비디오 메모리에 쓰기
     add si, 1                   ; 다음 글자
     add di, 2                   ; 다음 글자 (비디오 메모리 상)
 
     jmp .MESSAGELOOP
+
+.MESSAGENEWLINE:
+    add si, 1
+    push si
+    mov ax, word[bp+6]
+    add ax, 1
+    push ax
+    mov ax, word[bp+4]
+    push ax
+    call PRINTMESSAGE
+    add sp, 6
+    jmp .MESSAGEEND
 
 .MESSAGEEND:
     pop dx
@@ -127,10 +106,12 @@ MOVECURSOR:
     pop bp
     ret
 
-msgcol1:    db "   _____   __  __    ____     _____", 0
-msgcol2:    db "  / ____| |  \/  |  / __ \   / ____|", 0
-msgcol3:    db " | (___   | \  / | | |  | | | (___", 0
-msgcol4:    db "  \___ \  | |\/| | | |  | |  \___ \", 0
-msgcol5:    db "  ____) | | |  | | | |__| |  ____) |", 0
-msgcol6:    db " |_____/  |_|  |_|  \____/  |_____/", 0
-msgcol7:    db "SLOT MACHINE OPERATING SYSTEM", 0
+LOGO:
+    db "   _____   __  __    ____     _____", `\n`
+    db "  / ____| |  \/  |  / __ \   / ____|", `\n`
+    db " | (___   | \  / | | |  | | | (___", `\n`
+    db "  \___ \  | |\/| | | |  | |  \___ \", `\n`
+    db "  ____) | | |  | | | |__| |  ____) |", `\n`
+    db " |_____/  |_|  |_|  \____/  |_____/", `\n`
+    db `\n`
+    db "   SLOT MACHINE OPERATING SYSTEM", 0
